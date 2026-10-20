@@ -1,0 +1,357 @@
+# Testing and Findings
+
+Diary of the Go1 training tests. Times are taken from the screenshot and video file timestamps (UTC+8), so they are approximate.
+
+---
+
+## 2026-10-20
+
+**Goal:** Train a Go1 policy (`Go1JoystickFlatTerrain`, MuJoCo Playground, Brax PPO on a Colab T4) that walks on command.
+
+**Summary of the day**
+
+| Test | Steps (`num_timesteps`) | Final reward (plot) | Robot behaviour |
+|---|---|---|---|
+| 1 | 6M | about 0.4 | Steps for about 8 s, then falls |
+| 2 | 18M, reran changed cells only | about 3 | Stays up, stands in place |
+| 3 | 18M, clean full rerun | about 17.8 | Stays up, turns in place, ignores x/y |
+| 4 | 25M (plot to about 29.5M) | about 9.3 | Stays up, turns briefly, then stands still |
+
+Overall: the robot never walked in any direction. Reward is not the same as walking.
+
+---
+
+### 16:05 — Test 1: 6M steps
+
+**Setup:** `num_timesteps` = 6,000,000. Command x = 1, y = 0, yaw = 0. Compile 5:15, training 7:10.
+
+**Code:** Colab setup needed three fixes before Train would run:
+```python
+!pip install -q warp-lang
+!pip install -q -U flax      # then Runtime > Restart session
+# plus a shim cell restoring jax.device_put_replicated (Brax 0.14.2 still calls it)
+```
+
+**Result:** Reward about 0 until about 3.3M, peak about 0.65 near 4.9M, about 0.37 near 6M. The 20 s video shows the robot stepping for about 8 s, then falling.
+
+**Takeaway:** 6M steps is too short. Log: `Tests/Test1/Test1.md`.
+
+---
+
+### 16:44 — Test 2: 18M steps, reran changed cells only
+
+**Setup:** `num_timesteps` = 18,000,000, same session as Test 1 (no restart). Compile 0:59, training 11:38.
+
+**Code:** I changed only the `num_timesteps` cell and reran Train. I also left `x_vel = 25` in the rollout cell by mistake. The trained range is about ±1.5 m/s, so 25 means nothing. Corrected to `x_vel = 1`.
+
+**Result:** Reward rose to about 3, then flattened. The robot stays upright for 20 s but stands in place (floor grid shifts by under 1 px).
+
+**Takeaway:** More steps fixed the falling, not the walking. The low reward turned out to be unusual, see Test 3. Log: `Tests/Test2/Test2.md`.
+
+---
+
+### 17:28 — Test 3: 18M steps, clean full rerun
+
+**Setup:** Restarted and reran everything with `num_timesteps` = 18M.
+
+**Problem 1 (rendering crash):** Rollout and Render failed with "X11: The DISPLAY environment variable is missing". The fix is to set this before `mujoco` is imported:
+```python
+import os
+os.environ["MUJOCO_GL"] = "egl"
+```
+**Problem 2 (session crash):** The session crashed once for an unknown reason, so I retrained. The rerun gave reward about 17 to 19 (compile 1:11, training 11:17).
+
+**Rollouts (20 s each):**
+
+| Command (x / y / yaw) | Result |
+|---|---|
+| 1 / 0 / 0, 1.49 / 0 / 0, 0.3 / 0 / 0, -0.5 / 0 / 0 | Stands in place |
+| 0 / 0.8 / 0, 1 / 1 / 0 | Stands in place |
+| 0 / 0 / 1 | Steps and turns in place (about 0.9 rad/s, rough) |
+| 1 / -1 / 1 | Spins in place, never travels |
+
+**Takeaway:** The command reaches the policy, since yaw works. The policy learned to stay up and to turn, but ignores x and y. Reward about 5 to 6 times higher than Test 2 with the same step count, so Test 2 was probably affected by leftover session state (a guess). Log: `Tests/Test3/Test3.md`.
+
+---
+
+### 22:21 — Test 4: 25M steps, 3 camera views
+
+**Setup:** `num_timesteps` = 25,000,000. The first attempt hit an old-Flax error (`jax.core.get_opaque_trace_state` removed in JAX 0.11), fixed by upgrading Flax and restarting the session. Compile 1:14, training 11:15.
+
+**Code:** The rollout is simulated once, then rendered from three cameras (the Go1 model defines `track`, `top`, `side`, `back`):
+```python
+for cam in ["top", "side", "track"]:
+    frames = eval_env.render(
+        traj, camera=cam, scene_option=scene_option,
+        width=640, height=480, modify_scene_fns=mod_fns,
+    )
+    media.show_video(frames, fps=fps, loop=False, title=cam)
+    media.write_video(f"{cam}_x{x_vel}_y{y_vel}_yaw{yaw_vel}.mp4", frames, fps=fps)
+    del frames
+```
+
+**Result:** Reward rose to about 17.7 near 22.8M, then fell to about 9.3 by 29.5M. The plot matches the Test 3 curve until about 22.5M, so training is repeatable. The rollout uses the final (worse) policy.
+
+| Command (x / y / yaw) | Result |
+|---|---|
+| 0 / 0 / 1 | Turns for the first 2 to 3 s, then holds still |
+| 1 / -1 / 1, 1 / 0 / 1 | Settles in about 1 s, then stands still |
+
+No clip shows travel. `1 0 1/side.mp4` and `track.mp4` are the same file (copy mistake), so the track clip wasn't analysed.
+
+**Takeaway:** Training past about 23M made this setup worse. A 40M run with the same settings is unlikely to help. Log: `Tests/Test4/Test4.md`.
+
+---
+
+### Evening — Diagnosis: what the config says
+
+**Code (printed in Colab):**
+```python
+print(ppo_params)
+print("----------\n")
+print(env_cfg.command_config)
+```
+```
+!grep -n "def sample_command" -A 15 /usr/local/lib/python3.13/dist-packages/mujoco_playground/_src/locomotion/go1/joystick.py
+```
+
+**Findings**
+- `command_config`: `a = [1.5, 0.8, 6.283]`, `b = [0.9, 0.25, 0.5]`. Each command component is uniform in ±a, kept with probability `b`, and replaced with probability 0.5 per resample.
+- So x is nonzero 90% of the time and was well covered in training. Forward walking was **not** missing from the training commands.
+- Yaw goes up to ±6.28 rad/s, not the ±1.2 I had noted earlier. Most yaw commands are far above what the robot can track.
+- `ppo_params` look standard (batch 256, unroll 20, 32 minibatches, lr 3e-4, entropy 0.01, discount 0.97, `num_evals` 10).
+- Step totals on the plots are about `(num_evals - 1) × 3.28M` (likely, from memory of Brax's formula, unverified). That would explain the plot reaching about 22.5M for 18M and about 29.5M for 25M.
+
+**Hypothesis (untested):** The very wide yaw range may be why the policy learned turning but not forward speed.
+
+---
+
+## Takeaways
+
+1. **Reward is not walking.** Reward went from about 0.4 to about 17.8, yet the robot never travels.
+2. **Training is repeatable.** The same setup gave the same curve, so random noise doesn't explain the Test 2 gap. Something about how Test 2 was run differed.
+3. **More steps can hurt.** In Test 4, reward peaked near 23M and then declined, and turning stopped being continuous.
+4. **The policy follows yaw but not x or y,** across 7 command combinations.
+5. **Render the same rollout from every camera.** The same rollout from three cameras makes views comparable, and separate renders can differ.
+
+## Still unknown
+
+- Why the policy ignores x and y.
+- Why reward declines after about 23M steps.
+- Why training time stayed about 11:15 for both the 18M and 25M runs.
+- Whether the rollout policy is deterministic, and whether pushes are active.
+- Test 3's `num_evals` (I think 8).
+- Which GPU each run used.
+
+## Next
+
+1. **Test 5:** narrow yaw (`a[2]` from 6.28 to about 1.2), keep everything else as in Test 3, and compare.
+2. Save intermediate checkpoints so the peak policy (about 23M) can be rendered.
+3. Print `linvel` and `track` from the rollout to measure forward motion directly.
+4. Read the reward code and explain two terms in my own words.
+5. If it still doesn't walk, compare with the unmodified official notebook.
+
+---
+
+## 2026-10-21
+
+**Goal:** Run the long (100M step) training. Colab ran out of compute, so I moved training to my own laptop GPU.
+
+Times are from terminal and screenshot timestamps (UTC+8), approximate.
+
+### Late night (Oct 20) — Colab compute ran out
+
+- I started the 100M run on Colab, and the session stopped because the free compute ran out. I have no results from that run.
+- I looked at the paid options: Pay As You Go was SGD 14.46 for 100 compute units (no subscription, units expire after 90 days). I decided to try my own GPU first.
+
+### Notebook and config findings (read from the notebook and printed values)
+
+- **Training environment used the defaults:** printed `train env a = [1.5, 0.8, 1.2]`, pushes off.
+- **The yaw 2π and pushes are only in the eval environment**, set by the notebook's "Enable perturbation in the eval env" cell. The rollout cell sets `velocity_kick_range = [0.0, 0.0]`, so rollouts have no pushes.
+- **The rollout policy is deterministic** (`make_inference_fn(params, deterministic=True)`).
+- **Plot axis:** the notebook plots `xlim = num_timesteps * 1.25`, so the plot can cut off data.
+- **Reward arithmetic (from `joystick.py`):** the most a step earns is about `(1.0 + 0.5 + 0.5) × 0.02`, so about 40 per episode. The `pose` term alone is worth about 10, so reward 17 does not need walking.
+- **Measured:** for x = 1, y = 0, yaw = 1, mean `track` was 0.0187 and mean `linvel` about 0. `exp(-4) ≈ 0.0183`, so the robot's forward speed is essentially zero.
+
+**Corrections to the Oct 20 entries**
+- The idea that the wide yaw range (±6.28) caused the turning-only behaviour was wrong. Training used ±1.2.
+- "More steps hurt" (Test 4) is doubtful. The plot cutoff means the 18M and 25M runs probably both ran about 29.5M steps, and their final rewards differ (about 19 vs about 9.3), so the late drop is probably run-to-run variation. Not confirmed.
+- Test 2's low reward was probably an evaluation artifact. The eval environment likely had the yaw 2π and pushes, because the rollout cell ran before Train without a restart. Not confirmed for that session.
+- My leading explanation is now: the policy is undertrained. The official config uses 200M steps and these runs reached about 29.5M.
+
+### ~00:55 — Local setup (WSL2 + Ubuntu)
+
+| Item | Result |
+|---|---|
+| Laptop GPU | NVIDIA GeForce RTX 5060 Laptop, 8 GB |
+| RAM | about 31 GB (WSL gets about 15 GB) |
+| WSL | Installed WSL2 and Ubuntu 24.04 (`wsl --install -d Ubuntu-24.04`) |
+| GPU in WSL | `nvidia-smi` shows the GPU, driver 591.84 |
+| JAX | 0.12.0 with `jax[cuda12]`, `[CudaDevice(id=0)]`, 4000×4000 matmul printed `4000.0` |
+| Warp | 1.18.0, sees `cuda:0` (sm_120) |
+| Others | mujoco 3.16.0, brax 0.14.2, flax 0.12.10, playground 0.2.0 |
+| Environment | `Go1JoystickFlatTerrain` loaded, action size 12 |
+
+**Code:**
+```
+python3 -m venv ~/go1env
+source ~/go1env/bin/activate
+pip install -U "jax[cuda12]"
+pip install -U mujoco mujoco-mjx brax warp-lang flax mediapy playground
+export XLA_PYTHON_CLIENT_PREALLOCATE=false
+```
+
+A red "failed to allocate 4.35GiB" message appeared in the first GPU test. It was JAX's memory preallocation, and the calculation still ran.
+
+### ~01:00 — First local test run (`train_test.py`)
+
+The script is the notebook's Train cell trimmed for the terminal (shim for `jax.device_put_replicated`, domain randomization kept, `progress` prints instead of plotting).
+
+| Setting | Value |
+|---|---|
+| `num_timesteps` (requested) | 2,000,000 |
+| `num_evals` | 3 |
+| `num_envs` | 4096 |
+| Steps actually run | 3,276,800 |
+| Reward at 3.28M | 0.015 |
+| Time to jit | 2:24 |
+| Time to train | 2:23 (about 23,000 steps/s) |
+
+The solver and linesearch iteration warnings printed constantly, but the run completed.
+
+**Takeaway:** Training works on the laptop GPU. At about 23k steps/s, 100M steps would take roughly 70 minutes (one short measurement, not reliable).
+
+### 02:21 — First local 100M run
+
+| Setting | Value |
+|---|---|
+| `num_timesteps` | 100,000,000 |
+| `num_envs` | 4096 (not 8192, to fit 8 GB; Colab used 8192) |
+| `num_evals` | default (10) |
+| Saving | checkpoint at every evaluation (`ckpt_<step>`) and `go1_final` at the end |
+| How it runs | inside `tmux` (session `train`), laptop plugged in, log in `run1.log` |
+
+**Code added to the script:**
+```python
+from brax.io import model
+
+def save_ckpt(step, make_policy, params):
+    model.save_params(f"ckpt_{step}", params)
+
+# in the train_fn partial: policy_params_fn=save_ckpt,
+# at the end of the file:
+model.save_params("go1_final", params)
+```
+```
+python train_test.py 2>&1 | grep -v -E "iterations limit|To disable the print warning" | tee run1.log
+```
+
+At 02:33 the run was in progress (GPU working, laptop fans loud, 74°C, 60% GPU use, 1.3 GB memory). The `num_evals = 3` line from the short test was still in the script, so the run was 2 epochs of 50.8M steps.
+
+### ~02:50 — Run finished
+
+| Env steps | Reward |
+|---|---|
+| 0 | 0.001 |
+| 50,790,400 | 19.556 |
+| 101,580,800 | **26.248** |
+
+- **Steps actually run: 101,580,800.**
+- Time to jit 0:00:58, time to train 0:18:23, total 0:19:22, about **92,000 steps/s** (about 2x my estimate for the Colab T4).
+- Checkpoints saved: `ckpt_0`, `ckpt_50790400`, `ckpt_101580800`, `go1_final`. Backed up to `~/backup_run1`.
+- **Step formula (now confirmed twice):** each training step is `batch_size × unroll_length × num_minibatches` = 163,840 env steps. Each epoch is `ceil(num_timesteps / ((num_evals - 1) × 163,840 × 10))` × 10 × 163,840. The test run (asked 2M, ran 3,276,800) and `ckpt_50790400` both match. So the Colab "18M" and "25M" runs (with `num_evals` 10) each ran about 29.5M steps.
+
+### ~03:00 — Test 5: rollout of `go1_final`
+
+**Code (`rollout.py`):** rebuilds the policy network the way training did, loads the saved weights, runs 1000 steps with a fixed command, prints `track` and `linvel`, and renders three camera views.
+```
+python rollout.py 1 0 0 go1_final
+```
+
+| Command (x / y / yaw) | mean track | mean linvel (body frame) |
+|---|---|---|
+| 1 / 0 / 0 | **0.9405** | **0.961, 0.007, 0.018** |
+
+For comparison, the standing-still policy had mean track 0.0187. The robot now walks forward at about 0.96 m/s. Videos are in `Tests/Test5` (leg motion score about 5 to 10, vs about 0.2 to 0.5 for standing). Full log: `Tests/Test5/Test5.md`.
+
+### What changed vs the Colab runs
+
+| | Colab (Tests 3, 4) | Test 5 (local) |
+|---|---|---|
+| `num_timesteps` setting | 18M / 25M | 100M |
+| `num_evals` | 10 | 3 |
+| **Steps actually run** | **about 29.5M** | **about 101.6M** |
+| `num_envs` | 8192 | 4096 |
+| GPU | T4 | RTX 5060 Laptop |
+| Software | Colab's JAX, upgraded Flax | JAX 0.12.0, brax 0.14.2, flax 0.12.10 |
+| Rollout env | notebook's eval env (yaw 2π) | default env (yaw ±1.2) |
+| Command | x = 1, y = 0, yaw = 0 | the same |
+
+Unchanged: task, reward scales, command config, PPO hyperparameters, network, domain randomization, seed.
+
+The real step count (about 3.4x more) is the likeliest cause, but `num_envs`, hardware and software also changed, so it is not proven. A control run with the default `num_evals` (about 29.5M steps) on the laptop would test it.
+
+### What `num_evals` does
+
+It sets how many times training pauses to evaluate the policy: it splits training into `num_evals - 1` epochs, and after each one Brax runs evaluation episodes, calls `progress_fn` (the printed reward) and `policy_params_fn` (the checkpoint save). It does not change the learning algorithm. It does change the real total step count, because each epoch is rounded up. More evals give a finer reward curve and more checkpoints, at a small time cost.
+
+### What matters in training (rough ranking, general RL knowledge; only the first is supported by my own runs)
+
+1. **Tier 1, changes what can be learned:** total real steps; reward design; command setup; random seed (single runs can differ a lot).
+2. **Tier 2, shapes learning:** learning rate, entropy cost, discount, batch size, unroll length, minibatches, updates per batch, `num_envs`, network size, domain randomization.
+3. **Tier 3, bookkeeping and speed:** `num_evals` (but it changes the real step count through rounding), checkpoint saving, progress printing, warnings, GPU speed.
+4. **Measuring, not training:** the rollout setup changes what I see and conclude, not what the policy learns.
+
+Method: change one thing at a time and keep a table of what differed.
+
+### Corrections to earlier entries
+- The yaw 2π was not in training (training used ±1.2). The "wide yaw range" idea is dropped.
+- "More steps hurt" (Test 4) is dropped. The 18M and 25M Colab runs both ran about 29.5M steps, and the late reward drop is probably run-to-run variation.
+- The 100M run did not take 70 minutes. It took 19 minutes, about 92k steps/s, not 23k (the short test was dominated by compile and evaluation overhead).
+- The undertrained explanation is now supported by the rollout, not only by the reward.
+
+### ~03:40 — Mix-up: "18mil steps" videos that were really 100M
+
+I rendered `go1_final` a second time, 20 minutes after the first, and put the clips in a folder named "18mil steps". `go1_final` was still the 100M weights (no 18M training had run), so they were the same policy twice. A frame comparison showed the two sets almost identical for the first about 10 s, then drifting apart (small GPU differences grow over time). Lesson: use one folder per run, and name videos by the run's folder and checkpoint.
+
+### ~03:50 — Test 6: control run (about 29.5M steps, local)
+
+**Setup:** `~/go1_ctrl`, `num_timesteps` 18M, `num_evals` 10, `num_envs` 4096, the same laptop, software and script as Test 5.
+
+| | Test 6 (control) | Test 5 (walking run) |
+|---|---|---|
+| Steps run | **29,491,200** | 101,580,800 |
+| Final reward | 19.613 | 26.248 |
+| Training time | 7:24 (about 66k steps/s) | 18:23 (about 92k steps/s) |
+| mean `track` (x = 1) | **0.0187** | **0.9405** |
+| mean `linvel` | 0.002, -0.002, 0.002 | 0.961, 0.007, 0.018 |
+| Videos | Stands still (motion about 0.2 to 0.3) | Walks (motion about 5 to 10) |
+
+The step count matched the formula exactly (predicted 29,491,200). The videos are in `Tests/Test6/18mil steps/` (named after the 18M setting; actual steps 29,491,200). Log: `Tests/Test6/Test6.md`.
+
+**Takeaway**
+- Same machine, software, `num_envs` and script: about 29.5M steps stands still, and about 101.6M walks. Steps are the main driver in these runs.
+- The Colab notebook was not broken. It reproduces the standing-still result.
+- Reward around 19 to 20 went with standing, and 26 with walking (two policies, so a lead, not a rule).
+- Caveat: one seed per run; `num_evals` also differed (10 vs 3), which should not affect learning.
+
+### Insights so far
+1. Judge walking by rollout numbers and video, not by reward.
+2. Plan at least about 100M steps (the official setup is 200M). Standing is a stable local optimum that takes many steps to leave.
+3. Always read the real step count from `last step count`, not from `num_timesteps`.
+4. One folder per run, so results do not overwrite each other.
+
+### Still unknown
+- Where between 50.8M and 101.6M steps walking appears.
+- Whether `num_envs` 8192 changes the result.
+- Whether the policy follows yaw, sideways and backward commands.
+- How good the gait is (speed variation, sliding, hopping).
+- How much results vary between seeds.
+- Whether the constant solver warnings slow training.
+
+### Next
+1. Roll out `ckpt_50790400` from the Test 5 run (reward 19.556, expected to stand still).
+2. Rerun 100M with `num_evals` 20, then plot `track` against steps for several checkpoints.
+3. Rollouts for other commands on `go1_final`: 0 / 0 / 1, 0 / 0.5 / 0, -0.5 / 0 / 0, 1 / 0.5 / 0.5.
+4. 200M steps (about 40 minutes at this speed), and a second seed.
+5. Read the reward code and write two terms in my own words.
