@@ -5,6 +5,7 @@
 
 **Purpose:** Test whether the Colab runs stood still because of too few steps, or because of the Colab environment (T4, software, `num_envs`). Same laptop, software, script and `num_envs` as Test 5, with fewer steps.
 
+**Emotion** Reliefed to know that it wasn't my laptop that made it work.
 ## Setup
 
 | Setting | Value |
