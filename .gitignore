@@ -1,7 +1,7 @@
-   __pycache__/
-   *.pyc
-   .ipynb_checkpoints/
-   mujoco_menagerie/
-   *.mp4
-   *.pkl
-   *.npz
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+mujoco_menagerie/
+*.pkl
+*.npz
+Claude.md
