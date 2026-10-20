@@ -19,7 +19,7 @@ The short version of [`TestingAndFinding.md`](TestingAndFinding.md). Plain words
 
 ---
 
-## Oct 21 — My own laptop, and it moved
+## Oct 21 — Laptop integration and the first walking not talking
 
 **Switch to Ubuntu.** I installed Ubuntu inside Windows (WSL2), Claude guided my way to get my RTX 5060 working with JAX and Warp, and moved training off Colab. The laptop ran about twice as fast as Colab's free GPU.
 
