@@ -27,6 +27,9 @@
   </tr>
 </table>
 
+<a href="Tests/Test7/Test7.md"><img src="Tests/Test7/x1.0_y-1.0_yaw0.0/motion_x1.0_y-1.0_yaw0.0_go1_final.png" width="560" alt="Test 7, distance, velocity and rotation for command 1, -1, 0"></a>
+<br><sub>distance, velocity vs command and rotation &nbsp;·&nbsp; command x = 1, y = -1, yaw = 0</sub>
+
 </div>
 
 <!-- Keep the fun fact as the last section of this README. New sections go above it. -->
