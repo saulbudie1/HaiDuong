@@ -41,6 +41,10 @@ The short version of [`TestingAndFinding.md`](TestingAndFinding.md). Plain words
 
 **Things that broke.** My first rollouts for the two circling commands crashed, because saving every step for the video filled the GPU. Moving each step to the CPU fixed it, at a cost of about 11 minutes per video. The rough patch is only 20 m wide, so a robot walking straight reaches the edge after 7 to 13 seconds. I stop the rollout there. My time guess for the training (1.5 hours) was also too high, because it ran at about 66k steps per second.
 
+**How the robot is actually built.** I wondered what the 3D model is. It is five mesh files (STL: trunk, hip, thigh, mirrored thigh, calf) that the simulator draws, and it reuses them: one body, four hips, four thighs and four calves, so 13 pieces on screen. The pieces are joined by hinges, like door hinges: each piece can only swing around one axis, within limits, relative to the piece before it. The body itself floats free, and the 12 hinges (3 per leg) are the motors. What the simulator tracks is just 18 numbers: the body's position and tilt, and 12 joint angles. The meshes are only for the picture. The physics uses invisible simple shapes instead, like hitboxes in a game. The model has a box, cylinders and capsules for the body and legs, but they are switched off for collisions, so only the four foot spheres are live hitboxes and only they touch the ground. I also tested that a visual-only hat can be drawn on the robot without touching the physics.
+
+**Is it like a game?** Mostly yes: rigid pieces, hinges, contacts and springs are the same ingredients as a ragdoll game, and each motor works like an elastic band at the hinge (a spring that pulls the joint towards the target angle the policy picks, with some damping). The difference is the goal. Game physics aims to look right and stay stable. MuJoCo aims to be accurate for one real robot (total mass 12.7 kg) and to run thousands of copies at once on the GPU. It still takes shortcuts: the solver does a single pass per step, which is why the screen fills with "solver iterations limit reached". MuJoCo was not made by Fan Shi. It came from Emo Todorov's group at the University of Washington, and DeepMind bought it in 2021 and made it free in 2022.
+
 ---
 
 ## What I know now
@@ -54,6 +58,8 @@ The short version of [`TestingAndFinding.md`](TestingAndFinding.md). Plain words
 - The robot drifts in heading a little, because the turn command is a rate. The tilt is a limit of this kind of policy, not a bug.
 - On rough ground the robot still followed every command I tried, even a turn of 3 (one run, stopped at 82%).
 - A video rollout can run out of GPU memory. Moving each saved step to the CPU fixes it.
+- The robot model is 13 mesh pieces from 5 STL files, joined by 12 hinges, with an invisible simpler shape set used for the physics. Looks and physics are separate.
+- The motors act like springs at the hinges, and the solver is set to one pass per step on purpose, so the "solver iterations" warnings are normal.
 
 ## Still don't know
 

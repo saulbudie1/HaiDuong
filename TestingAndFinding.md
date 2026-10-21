@@ -396,6 +396,46 @@ The step count matched the formula exactly (predicted 29,491,200). The videos ar
 - A quick check, not saved in the repo: the flat policy from Test 7 scored 0.46 on 1 / -1 / 1 on this terrain, against 0.914 here. Different training runs, so a hint only.
 - Caveats: one seed, 82% of the planned steps, small bumps (up to about 5 cm). Logs: `Tests/Test7/Test7.md`, `Tests/Test7.5/Test7.5.md`, `Tests/Test8/Test8.md`.
 
+### ~22:30 — How the Go1 model is built (read from the XML, counted with MuJoCo)
+
+**Source of the files:** the five STL files come from the MuJoCo Menagerie repo (`deepmind/mujoco_menagerie`, `unitree_go1/assets/`, BSD-3 from Unitree). Playground does not ship them: on first load it runs `git clone` of Menagerie into `mujoco_playground/external_deps/mujoco_menagerie` and checks out a pinned commit (`1b86ece5…`, 2025-11-06). That is why the files in `go1env` are dated at my first run. The model file is `go1_mjx_feetonly.xml`.
+
+**Counts (from `env.mj_model`)**
+
+| Thing | Count |
+|---|---|
+| Mesh files | 5 (`trunk`, `hip`, `thigh`, `thigh_mirror`, `calf`) |
+| Visible mesh pieces | 13 (trunk 1, hip 4, thigh 2 + thigh_mirror 2, calf 4) |
+| Bodies (excluding the world) | 13: trunk + 4 legs × (hip, thigh, calf) |
+| Joints | 13: one free joint (the trunk, 6 degrees of freedom) + 12 hinges |
+| Actuators | 12 (one per hinge) |
+| Degrees of freedom | 18 (6 body + 12 joint angles) |
+| Hidden simple shapes (group 3) | 1 box, 12 cylinders, 20 capsules, 4 spheres |
+| Shapes that can collide with the floor | **4 foot spheres only.** The box, cylinders and capsules have `contype` 0 and `conaffinity` 0 (checked), so they cannot collide with anything in this "feet only" model. The mesh pieces (group 2) have no collisions either. |
+| Physics timestep / policy step | 0.004 s / 0.02 s |
+
+**How it works**
+- The pieces form a tree: trunk → hip → thigh → calf, each placed at a fixed offset from its parent. The 12 hinges say each piece can only rotate about one axis relative to its parent, within limits (for example, hip swing about ±0.86 rad). The trunk floats free in the world.
+- The policy outputs 12 target joint angles. A spring-damper (PD) controller turns the gap between target and actual angle into a motor force, and the simulator integrates the forces and contacts.
+- The simulator's whole state for the robot is 18 numbers (`qpos`: body position, orientation, 12 joint angles).
+- Rendering copies those numbers into a MuJoCo `MjData`, runs `mj_forward` to place every body, and MuJoCo's OpenGL renderer draws the STL triangles at those places. The meshes are visual only (group 2, no collisions). The only live collision shapes are the four foot spheres. The hidden box, cylinders and capsules are defined in the file but switched off.
+- A visual-only part (a hat) can be added without changing the physics: the trunk's mass is set explicitly, and a visual shape adds no joints, so `qpos` keeps the same shape. Tested: a hat drawn through `modify_scene_fns` in the render call (cylinders, one function per frame). Not tested: loading a custom STL (its bytes have to be in the assets dictionary under the filename used in the XML).
+
+**Motors and settings (read from the XML, the config and the loaded model)**
+- Each hinge has a position actuator with `kp` 35 and a torque limit of ±23.7 N·m, plus joint damping 0.5 (acts as Kd) and armature 0.005. The policy's action is a target angle (`action_scale` 0.5 around the default pose). So each joint behaves like a spring-damper: torque = Kp × (target − angle) − Kd × speed.
+- The XML's default class says "This globally disables all collisions" (`contype` 0, `conaffinity` 0). Only the four foot spheres switch collisions back on.
+- Mesh sizes (metres, no scale in the XML): the trunk mesh spans x -0.132 to 0.299, y ±0.097, z -0.061 to 0.073 (0.431 × 0.194 × 0.134 m, 112,384 triangles). The hip and calf meshes are about 30k triangles each. The trunk's `head` marker is at x = 0.3, at the front edge of the mesh. Trunk mass 5.2 kg, total 12.74 kg.
+- Solver: Newton with 1 iteration per physics step. This is why `solver iterations limit reached` prints constantly. It is a speed trade-off, not an error. I have not measured whether it slows training.
+- Timing: physics step 0.004 s, policy step 0.02 s (5 physics steps per policy step), 4096 robots in parallel on the GPU.
+
+**How this compares with game engines** (general knowledge; I did not test a game engine)
+- Same ingredients: rigid bodies, hinges, contacts, friction, springs. A ragdoll with hinges and elastic bands is the same idea as a joint with a spring-damper.
+- Different goal: games aim for stable and good-looking; MuJoCo aims for accuracy about a specific robot (masses and joint limits from the real Go1) and for speed on many copies at once.
+- MuJoCo stores the robot as joint coordinates (the 18 numbers), so hinges cannot pull apart. Many game ragdolls treat each piece as free and hold it with constraints that can stretch. This varies by engine.
+- It is still approximate: one solver iteration, soft contacts. The gap to a real robot is why domain randomization is on in training.
+
+**Where MuJoCo comes from:** first built at the University of Washington (2012 paper by Todorov, Erez and Tassa), sold by Roboti LLC, bought by Google DeepMind in October 2021, open-sourced under Apache 2.0 in May 2022. Sources: Wikipedia (MuJoCo) and OpenSource For You. I found no link between Fan Shi and MuJoCo itself; his co-authored paper (arXiv 2410.03076) is about differentiable simulation, and its abstract does not name the simulator.
+
 ### Insights so far
 1. Judge walking by rollout numbers and video, not by reward.
 2. Plan at least about 100M steps (the official setup is 200M). Standing is a stable local optimum that takes many steps to leave.
@@ -406,6 +446,7 @@ The step count matched the formula exactly (predicted 29,491,200). The videos ar
 7. Heading drifts slowly because yaw is a rate and the policy has no heading input. The fix belongs outside the policy.
 8. Video rollouts hold every state on the GPU, so long ones can run out of memory. Move the states to the CPU, or skip the video.
 9. On rough ground the policy followed every command tried (one run, stopped at 82%).
+10. Looks and physics are separate: 13 mesh pieces from 5 STL files for the picture, 4 foot spheres as the only live collision shapes, 12 hinges as the motors.
 
 ### Still unknown
 - Whether walking starts around 57M to 66M steps in the 120M run (reward climbs there). Needs those checkpoints rolled out.

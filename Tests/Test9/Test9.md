@@ -1,0 +1,1 @@
+Claude reported to me that seed for randomizer so I looked into it and this time we are doing a renderless test for raw data, pinpointing howmany step does it take for the leap that allow the machine to walk. We are doing x intervals with seed from 1 to 5 (instead of 0) back to back.

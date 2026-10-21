@@ -31,6 +31,7 @@ Newest date first. When a new day starts, add its heading at the top.
 - [ ] Print each reward term in the rollout to see what the standing policy earns
 
 **Ideas**
+- [ ] Pumpkin hat: model a low-poly pumpkin STL myself (about 0.14 m wide, origin at the base, in metres), then attach it to the trunk in a render-only copy of the model (see TestingAndFinding, "How the Go1 model is built")
 - [ ] Chase mode: a controller that steers the policy toward a moving target (no chase task in Playground)
 - [ ] Gait modes (bound, pronk) only exist for Spot, not Go1, so a Go1 version needs a custom task
 
