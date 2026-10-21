@@ -1,0 +1,16 @@
+command: 1.0 0.0 0.0
+mean track: 0.9292483477708869
+mean linvel (body frame): [0.96504074 0.00175515 0.01175293]
+saved motion_x1.0_y0.0_yaw0.0_ckpt_91750400.npz
+command: 1.0 -1.0 0.0
+mean track: 0.8170807452173904
+mean linvel (body frame): [ 0.88971686 -0.83211285 -0.02321953]
+saved motion_x1.0_y-1.0_yaw0.0_ckpt_91750400.npz
+command: 1.0 -1.0 1.0
+mean track: 0.913576500528492
+mean linvel (body frame): [ 0.93034506 -0.9456887  -0.0413297 ]
+saved motion_x1.0_y-1.0_yaw1.0_ckpt_91750400.npz
+command: 0.5 0.5 3.0
+mean track: 0.8476122881341726
+mean linvel (body frame): [0.6041709  0.36645165 0.00988923]
+saved motion_x0.5_y0.5_yaw3.0_ckpt_91750400.npz

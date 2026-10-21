@@ -2,21 +2,21 @@
 
 <div align="center">
 
-### Latest test: [Test 7](Tests/Test7/Test7.md)
-**Diagonal commands, about 123M steps: the Go1 walks forward and sideways at the same time, even outside the trained range.**
+### Latest test: [Test 8](Tests/Test8/Test8.md)
+**Rough terrain, about 91.75M steps (the run stopped early): the Go1 follows straight, diagonal, circling and fast-spin commands on bumpy ground.**
 
-<a href="Tests/Test7/Test7.md"><img src="Tests/Test7/reward_plot.png" width="560" alt="Test 7, eval reward vs steps"></a>
-<br><sub>eval reward vs steps &nbsp;·&nbsp; 26.9 at 122.9M steps</sub>
+<a href="Tests/Test8/Test8.md"><img src="Tests/Test8/reward_plot.png" width="560" alt="Test 8, eval reward vs steps"></a>
+<br><sub>eval reward vs steps &nbsp;·&nbsp; 24.1 at 91.75M steps (stopped early, GPU out of memory)</sub>
 
-<a href="Tests/Test7/Test7.md"><img src="Tests/Test7/preview/track.gif" width="420" alt="Test 7, track view"></a>
-<br><sub>track view &nbsp;·&nbsp; command x = 1, y = -1, yaw = 0 &nbsp;·&nbsp; mean speed tracking 0.932 (walking)</sub>
-<br><sub>full videos: <a href="Tests/Test7/x1.0_y-1.0_yaw0.0/side_x1.0_y-1.0_yaw0.0_go1_final.mp4">side</a> &nbsp;·&nbsp; <a href="Tests/Test7/x1.0_y-1.0_yaw0.0/top_x1.0_y-1.0_yaw0.0_go1_final.mp4">top</a> &nbsp;·&nbsp; <a href="Tests/Test7/x1.0_y-1.0_yaw0.0/track_x1.0_y-1.0_yaw0.0_go1_final.mp4">track</a></sub>
+<a href="Tests/Test8/Test8.md"><img src="Tests/Test8/preview/top.gif" width="320" alt="Test 8, top view"></a>
+<br><sub>top view &nbsp;·&nbsp; command x = 0.5, y = 0.5, yaw = 3 &nbsp;·&nbsp; mean speed tracking 0.848 (walking in a tight circle)</sub>
+<br><sub>full videos: <a href="Tests/Test8/x0.5_y0.5_yaw3.0/side_x0.5_y0.5_yaw3.0_ckpt_91750400.mp4">side</a> &nbsp;·&nbsp; <a href="Tests/Test8/x0.5_y0.5_yaw3.0/top_x0.5_y0.5_yaw3.0_ckpt_91750400.mp4">top</a> &nbsp;·&nbsp; <a href="Tests/Test8/x0.5_y0.5_yaw3.0/track_x0.5_y0.5_yaw3.0_ckpt_91750400.mp4">track</a></sub>
 
-<a href="Tests/Test7/Test7.md"><img src="Tests/Test7/x1.0_y-1.0_yaw0.0/motion_x1.0_y-1.0_yaw0.0_go1_final.png" width="560" alt="Test 7, distance, velocity and rotation for command 1, -1, 0"></a>
-<br><sub>distance, velocity vs command and rotation &nbsp;·&nbsp; command x = 1, y = -1, yaw = 0</sub>
+<a href="Tests/Test8/Test8.md"><img src="Tests/Test8/x0.5_y0.5_yaw3.0/motion_x0.5_y0.5_yaw3.0_ckpt_91750400.png" width="560" alt="Test 8, distance, velocity and rotation for command 0.5, 0.5, 3"></a>
+<br><sub>distance, velocity vs command and rotation &nbsp;·&nbsp; command x = 0.5, y = 0.5, yaw = 3</sub>
 
-<a href="Tests/Test7/Test7.md"><img src="Tests/Test7/x1.0_y-1.0_yaw0.0/trail_x1.0_y-1.0_yaw0.0_go1_final.png" width="480" alt="Test 7, bird's-eye trail for command 1, -1, 0"></a>
-<br><sub>bird's-eye trail: body centre and head tip, start to end &nbsp;·&nbsp; command x = 1, y = -1, yaw = 0 &nbsp;·&nbsp; head tip drawn 2 m ahead for readability</sub>
+<a href="Tests/Test8/Test8.md"><img src="Tests/Test8/x0.5_y0.5_yaw3.0/trail_x0.5_y0.5_yaw3.0_ckpt_91750400.png" width="480" alt="Test 8, bird's-eye trail for command 0.5, 0.5, 3"></a>
+<br><sub>bird's-eye trail: body centre and head tip, start to end &nbsp;·&nbsp; command x = 0.5, y = 0.5, yaw = 3 &nbsp;·&nbsp; about 9 laps in 20 s</sub>
 
 </div>
 
