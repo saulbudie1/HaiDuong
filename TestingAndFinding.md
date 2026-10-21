@@ -436,6 +436,68 @@ The step count matched the formula exactly (predicted 29,491,200). The videos ar
 
 **Where MuJoCo comes from:** first built at the University of Washington (2012 paper by Todorov, Erez and Tassa), sold by Roboti LLC, bought by Google DeepMind in October 2021, open-sourced under Apache 2.0 in May 2022. Sources: Wikipedia (MuJoCo) and OpenSource For You. I found no link between Fan Shi and MuJoCo itself; his co-authored paper (arXiv 2410.03076) is about differentiable simulation, and its abstract does not name the simulator.
 
+### Oct 21 evening — Checkpoint sweep of the Test 7 run (command 1 / 0 / 0, flat, no video)
+
+Each of the 16 checkpoints of the Test 7 run (`~/go1_test8`, every 8.2M steps) rolled out in `~/go1_sweep7`.
+
+| Checkpoint (steps) | Reward (Test 7 log) | mean `track` | mean forward speed (m/s) | Behaviour |
+|---|---|---|---|---|
+| 0 | 0.001 | 0.018 | 0.004 | Stands |
+| 8.2M | 8.3 | 0.019 | 0.003 | Stands |
+| 16.4M | 16.9 | 0.019 | 0.002 | Stands |
+| 24.6M | 19.3 | 0.019 | 0.003 | Stands |
+| 32.8M | 19.0 | 0.019 | 0.002 | Stands |
+| 41.0M | 19.3 | 0.019 | 0.002 | Stands |
+| 49.2M | 19.2 | 0.019 | 0.002 | Stands |
+| 57.3M | 20.1 | 0.019 | 0.002 | Stands |
+| **65.5M** | 22.4 | **0.792** | 0.821 | **Walks** (slow, y drift -0.12) |
+| 73.7M | 24.4 | 0.914 | 0.926 | Walks |
+| 81.9M | 24.9 | 0.940 | 0.963 | Walks |
+| 90.1M | 25.5 | 0.927 | 0.944 | Walks |
+| 98.3M | 26.7 | 0.936 | 0.959 | Walks |
+| 106.5M | 27.0 | 0.944 | 0.964 | Walks |
+| 114.7M | 27.0 | 0.939 | 0.939 | Walks |
+| 122.9M | 26.9 | 0.942 | 0.943 | Walks (final) |
+
+**Findings**
+- In this run walking appears **between 57.3M and 65.5M steps**, suddenly: `track` goes from 0.019 to 0.79 within one 8.2M-step gap, then creeps up to about 0.94. The exact step is not known (checkpoints are 8.2M apart).
+- Reward misled before the switch: 16.9 at 16.4M and 20.1 at 57.3M while the robot did not move.
+- `track` 0.019 is what standing still at x = 1 gives (`exp(-4)` is about 0.018). The untrained `ckpt_0` reads the same.
+- Hypothesis, not tested: the tracking score is flat near zero when the robot is a full 1 m/s off, so there is little signal to follow until some version of the policy starts moving.
+- Caveats: one seed, one command, one rollout per checkpoint.
+
+### Oct 22 ~02:00 — Test 9: five more seeds (flat ground, no video)
+
+**Setup:** seeds 1 to 5, `~/go1_seed1` to `~/go1_seed5`, same task and `num_envs` 4096, seed set with `seed=N` in `ppo.train` (every earlier run used the default seed 0). Seed 1: 60 evaluations (96,665,600 steps, a checkpoint every 1.64M). Seeds 2 to 5: 31 evaluations (98,304,000 steps, a checkpoint every 3.28M). Run as one overnight queue in tmux. Logs and reward graphs are in `Tests/Test9/`.
+
+| Run | Evaluations | Steps | Training time | Final reward | Peak reward | Reward first reached 21 |
+|---|---|---|---|---|---|---|
+| seed 0 (Test 7) | 16 | 122.9M | 29:31 | 26.9 | 27.0 | 65.5M (20.1 at 57.3M) |
+| **seed 1** | **60** | 96.7M | 21:51 | **0.2** | 18.7 | **never** |
+| seed 2 | 31 | 98.3M | 20:18 | 26.1 | 27.3 | 52.4M |
+| seed 3 | 31 | 98.3M | 20:13 | 26.9 | 26.9 | 55.7M |
+| seed 4 | 31 | 98.3M | 19:47 | 26.9 | 27.3 | 55.7M |
+| seed 5 | 31 | 98.3M | 20:15 | 26.4 | 26.7 | 59.0M |
+
+**Findings**
+- **Seeds 2 to 5 have the same reward shape as seed 0:** about 19 to 20 for a long stretch, a climb from about 50 to 59M steps, 26 to 27 at the end. "Reward 21" is a rough marker I chose (in seed 0 the robot stood at 20.1 and walked at 22.4). **They have not been rolled out, so walking is not confirmed.**
+- **Seed 1 collapsed.** Reward rose to about 18.7 by 18M (the standing level), dropped to about 12 at about 34M, bumped to 16 at 75M, then fell to about 0.2 by 85M and stayed there. The sweep (16 checkpoints, 1 / 0 / 0) gave `track` 0.018 to 0.0195 and forward speed near zero at every checkpoint, so it never walked. A reward that low suggests very short episodes (such as falling over), but I have not seen a video.
+- **Confounded:** seed 1 was the only run with 60 evaluations. It is not known whether the collapse comes from the seed or the schedule. Next: rerun seed 1 with 31 evaluations, and another seed with 60.
+- In the Colab Test 4 the reward also dropped late in training. It may have been the same kind of collapse (not known).
+- **Timing:** training was faster than estimated (about 74k steps/s with 60 evaluations, about 81k steps/s with 31). Evaluation overhead is smaller than the 15 to 35 s per evaluation I had guessed.
+- A seed is the starting number for all the randomness in training (initial weights, random commands, noise). Same seed and settings give nearly the same run (not bit-identical on a GPU).
+
+### Oct 22 — The perceptive-quadruped paper (arXiv 2410.03076): how vision is used
+
+Checked against the paper's PDF (`Reference/`, 8 pages, text extracted with pypdf). Authors: Luo, Song, Klemm, Shi, Scaramuzza, Hutter. Affiliations: Luo, Klemm and Hutter at ETH Zurich, Song and Scaramuzza at the University of Zurich, Shi at NUS.
+- **Sensor:** a depth camera, not RGB. "The robot observes a 16x12 wide depth-camera input along with its velocity." The policy takes the flattened 16 by 12 depth input through a single dense layer, and the paper says a dedicated image pre-processing network may not be needed. An 84 by 84 depth map with a standard CNN is used in a separate comparison. The text speaks of obstacles "within its field of view" but does not say where the camera is mounted.
+- **Simulation only:** the word "real" does not appear in the text, and no real-robot experiment is described ("hardware" appears only for hardware acceleration). The renderer is not named; the paper writes about "depth rays". The main method avoids the rendering gradient, and the text says poorly conditioned depth gradients near object edges are expected to hurt the learning signal.
+- **Speed claims:** the point-mass navigation is solved "in seconds" (about 50,000 simulator steps), and the pixel-to-joint-angle navigation on the quadruped trains with similar sample efficiency to blind locomotion, "1.5e6 samples corresponds to 15 minutes of wall-clock time".
+- **Tasks:** a planar point-mass robot for pixel-based navigation (it tracks a forward velocity while avoiding obstacles seen in the depth input), and a quadruped for locomotion plus navigation.
+- **Quadruped and framework:** ANYmal C in MuJoCo MJX (the same framework as my Go1 runs), trained with SHAC (a differentiable-simulation method) and PPO. The wall-clock timings are on an Nvidia 3060 Ti.
+- **Limitations stated:** the combined quadruped navigation converges to a local minimum with lower robustness. Noise robustness is tested only for the point-mass policy.
+- **For my project:** my Go1 policy is blind (48 inputs, no terrain information). The paper's idea of a small depth or height input is the closest cheap step. MJX has ray casting (`mjx.ray`, checked in the installed version), and Playground's Go1 code does not use it.
+
 ### Insights so far
 1. Judge walking by rollout numbers and video, not by reward.
 2. Plan at least about 100M steps (the official setup is 200M). Standing is a stable local optimum that takes many steps to leave.
@@ -447,9 +509,13 @@ The step count matched the formula exactly (predicted 29,491,200). The videos ar
 8. Video rollouts hold every state on the GPU, so long ones can run out of memory. Move the states to the CPU, or skip the video.
 9. On rough ground the policy followed every command tried (one run, stopped at 82%).
 10. Looks and physics are separate: 13 mesh pieces from 5 STL files for the picture, 4 foot spheres as the only live collision shapes, 12 hinges as the motors.
+11. In the one run checked with rollouts, walking starts suddenly between 57.3M and 65.5M steps. The reward plateau at 19 to 20 is standing. About 80M to 100M steps is a sensible budget, and more barely helps (26.7 at 98M vs 26.9 at 123M).
+12. Training can collapse (seed 1: reward fell to 0.2), so one seed is not enough. Seed versus 60-evaluation schedule is not yet separated.
+13. The vision in the lab's paper is a tiny simulated depth image (16 by 12), fed to a single dense layer, with no real-robot experiment described (checked in the PDF text).
 
 ### Still unknown
-- Whether walking starts around 57M to 66M steps in the 120M run (reward climbs there). Needs those checkpoints rolled out.
+- Whether seeds 2 to 5 walk, and whether the switch lands in the same window for each (needs rollouts).
+- Whether seed 1's collapse comes from the seed or the 60-evaluation schedule, and what the collapsed robot does (needs a video).
 - Whether `num_envs` 8192 changes the result.
 - Whether the policy walks backward and turns in place (diagonals work).
 - How good the gait is (speed variation, sliding, hopping).

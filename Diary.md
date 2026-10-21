@@ -45,6 +45,20 @@ The short version of [`TestingAndFinding.md`](TestingAndFinding.md). Plain words
 
 **Is it like a game?** Mostly yes: rigid pieces, hinges, contacts and springs are the same ingredients as a ragdoll game, and each motor works like an elastic band at the hinge (a spring that pulls the joint towards the target angle the policy picks, with some damping). The difference is the goal. Game physics aims to look right and stay stable. MuJoCo aims to be accurate for one real robot (total mass 12.7 kg) and to run thousands of copies at once on the GPU. It still takes shortcuts: the solver does a single pass per step, which is why the screen fills with "solver iterations limit reached". MuJoCo was not made by Fan Shi. It came from Emo Todorov's group at the University of Washington, and DeepMind bought it in 2021 and made it free in 2022.
 
+**Where walking starts.** I rolled out all 16 checkpoints of the 120M run. The robot stood still up to 57.3M steps and was walking at 65.5M, so the switch is somewhere in that gap and it is sudden. Walking was a bit slow and drifting at 65.5M, and got polished by about 80M. Reward alone had been misleading: it was already 17 at 16M steps while the robot stood still.
+
+---
+
+## Oct 22 — More seeds, and one run that collapsed
+
+**Test 9 (seeds).** I trained five more runs on flat ground (seeds 1 to 5) to see whether walking shows up reliably. Training was faster than I guessed, about 20 minutes each. Four of them (seeds 2 to 5) had reward curves like the Test 7 run: about 19 to 20 for a long stretch, then a climb that starts around 52 to 59M steps and ends at 26 to 27. I have not rolled them out yet, so I have not confirmed that they walk. Seed 1 broke. Its reward rose to 18.7 by 18M steps, dropped to about 12, and then fell to 0.2 by 85M. No checkpoint walked, and its speed stayed near zero. But seed 1 was also the only run with 60 evaluations (the others had 31), so I cannot tell whether it was the seed or the setup. In my Colab Test 4 the reward also fell late in training, and that may have been the same kind of collapse, but I do not know.
+
+**What a seed is.** The starting number for all the randomness in training (starting network weights, random commands, noise). Same seed and settings give nearly the same run, and a different seed is different luck. Every run before Test 9 used seed 0.
+
+**The paper.** I looked at the vision part of the paper from the lab (arXiv 2410.03076, Fan Shi is a co-author). I read the PDF text (8 pages): the vision is a very small **simulated depth image** (16 by 12 pixels, with 84 by 84 for one CNN comparison), not RGB and not a real camera. It is rendered depth rays, flattened and fed to a single dense layer, and the paper says no separate image network may be needed. The text speaks of a "field of view" but not where the camera is mounted, and it describes no real-robot experiment. The quadruped is an ANYmal C simulated in MuJoCo MJX, the same framework I use, and the navigation part uses a simple point-mass robot. So their "perception" is a low-resolution depth input to a policy trained in simulation. My Go1 policy is blind, and a small depth or height-map input would be the cheap version of the same idea.
+
+**Accessories.** Next I want to make three weightless accessories for the robot: a pumpkin head, a cone birthday hat and a backpack. They are visual only, so they cannot change how it moves.
+
 ---
 
 ## What I know now
@@ -60,10 +74,14 @@ The short version of [`TestingAndFinding.md`](TestingAndFinding.md). Plain words
 - A video rollout can run out of GPU memory. Moving each saved step to the CPU fixes it.
 - The robot model is 13 mesh pieces from 5 STL files, joined by 12 hinges, with an invisible simpler shape set used for the physics. Looks and physics are separate.
 - The motors act like springs at the hinges, and the solver is set to one pass per step on purpose, so the "solver iterations" warnings are normal.
+- In the one run I checked with rollouts, walking started between 57.3M and 65.5M steps, suddenly. Four other seeds have reward curves that suggest about 52 to 59M, but I have not rolled them out. About 80M to 100M steps is a sensible budget, and more barely helps (the reward was flat from 98M to 123M).
+- Training can collapse: seed 1's reward fell to 0.2. Whether that was the seed or its 60-evaluation setup is not known.
+- The vision in the lab's paper is a tiny simulated depth image (read from the PDF text), with no real-robot experiment described.
 
 ## Still don't know
 
-- Whether walking starts around 57M to 66M steps (the reward climbs there). Needs those checkpoints rolled out.
+- Whether seeds 2 to 5 actually walk, and whether the switch lands in the same window for each (needs rollouts).
+- Whether seed 1's collapse was the seed or the 60-evaluation schedule.
 - Whether it walks backward and turns in place (the diagonals work).
 - How much a different random seed changes things, and whether the drift following the sideways command is real.
 - Whether more `num_envs` (8192) changes the result.
