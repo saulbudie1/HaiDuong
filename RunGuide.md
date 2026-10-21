@@ -10,7 +10,7 @@ How to train the Go1 policy, test it, and judge whether it walks. Written for my
 |---|---|
 | Python environment | `~/go1env` |
 | Working folder | `~/go1` (training script `train_test.py`, rollout script `rollout.py`) |
-| Scripts in the repo | `Scripts/` (`train_test.py`, `rollout.py`, `plot_reward.py`, `plot_motion.py`). Copy them into the run folder, see 2.1. |
+| Scripts in the repo | `Scripts/` (`train_test.py`, `rollout.py`, `plot_reward.py`, `plot_motion.py`, `plot_trail.py`). Copy them into the run folder, see 2.1. |
 | First 100M run (backup) | `~/backup_run1` |
 | Open the folder from Windows | `\\wsl$\Ubuntu-24.04\home\thanh\go1` |
 | Project on Windows | `C:\Users\Admin\Documents\HaiDuong` (WSL path `/mnt/c/Users/Admin/Documents/HaiDuong`) |
@@ -34,7 +34,7 @@ The prompt should start with `(go1env)`. Type commands **one at a time**. Pastin
 Saved files have fixed names (`go1_final`, `ckpt_<step>`), so a new run in the same folder overwrites them. Use one folder per run:
 ```
 mkdir -p ~/go1_run2
-cp ~/go1/train_test.py ~/go1/rollout.py ~/go1/plot_reward.py ~/go1/plot_motion.py ~/go1_run2/
+cp ~/go1/train_test.py ~/go1/rollout.py ~/go1/plot_reward.py ~/go1/plot_motion.py ~/go1/plot_trail.py ~/go1_run2/
 cd ~/go1_run2
 ```
 
@@ -134,6 +134,20 @@ It prints a short summary and saves `motion_x1.0_y0.0_yaw0.0_go1_final.png` with
 - Several files at once, PNGs into a folder: `python plot_motion.py motion_*.npz -o plots`
 - The `.npz` also holds the accelerometer reading (`accel`) if you ever want acceleration. It is not plotted.
 - Test 6 check (29.5M steps, command 1 / 0 / 0): ends 0.04 m from the start, mean velocity about 0.002 m/s, `track` 0.019. This is standing still.
+
+### 3.2 Trail map (bird's-eye path)
+
+`plot_trail.py` reads the same `.npz` and draws a square top-down map on a dark ground:
+```
+python plot_trail.py motion_x1.0_y-1.0_yaw0.0_go1_final.npz
+```
+It saves `trail_x1.0_y-1.0_yaw0.0_go1_final.png`.
+
+- The body centre trail is shaded from `#82782f` (start) to `#5bd117` (end). The head tip trail is shaded from `#1d1c85` to `#f0569e`. Two colour bars show the spectrum against time, and a legend marks the start and the two end points.
+- Thin lines from the centre to the head tip show the heading over time (`--tick-every N` steps, default 25).
+- The real head is 0.3 m ahead of the body centre. On a long walk that is tiny, so the two trails overlap. Use `--head-length 2` to pull them apart (drawing aid only, the data is not changed).
+- Folder and several files work the same as in 3.1: `python plot_trail.py motion_*.npz -o trails --head-length 2 --tick-every 100`.
+- The start direction is random, so compare the shape of trails, not their direction on the page.
 
 ---
 
