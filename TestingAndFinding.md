@@ -335,23 +335,86 @@ The step count matched the formula exactly (predicted 29,491,200). The videos ar
 - Reward around 19 to 20 went with standing, and 26 with walking (two policies, so a lead, not a rule).
 - Caveat: one seed per run; `num_evals` also differed (10 vs 3), which should not affect learning.
 
+### ~15:30 — Test 7: 120M run, diagonal commands
+
+**Setup:** WSL folder `~/go1_test8` (the repo calls it Test 7), `num_timesteps` 120M, `num_evals` 16, `num_envs` 4096. `num_evals` 16 was chosen so the real total lands near 120M: it ran **122,880,000** steps (15 epochs of 8,192,000). Compile 0:59, training 29:31, about 69k steps/s.
+
+**Reward:** final 26.936, peak 26.961 at 106.5M. It sat at about 19 from 24.6M to 57.3M steps (the standing level of the earlier tests), then climbed to about 27. I did not roll out the plateau checkpoints.
+
+| Command (x / y / yaw) | mean `track` | mean `linvel` x, y | Distance from start | Yaw turned |
+|---|---|---|---|---|
+| 1 / 0 / 0 | 0.942 | 0.943, -0.003 | 18.8 m | -16.6° |
+| 1 / 0.5 / 0 | 0.943 | 0.965, 0.464 | 21.2 m | +21.1° |
+| 1 / -0.5 / 0 | 0.953 | 0.955, -0.477 | 21.2 m | -19.7° |
+| 1 / -1 / 0 | 0.932 | 0.950, -0.930 | 26.0 m | -36.4° |
+
+**Findings**
+- All four commands are followed. That includes y = -1, outside the trained y range of ±0.8 (`command_config.a = [1.5, 0.8, 1.2]`). Out-of-range commands are not blocked, the policy just receives them as an input it never trained on.
+- **The slow turn at yaw = 0.** The yaw command is a turn rate, not a heading. The mean yaw rate at 1 / -1 / 0 was -0.031 rad/s, which over 20 s is about -36° (the same number as the graph). The reward does not punish it (`tracking_ang_vel` is `exp(-error² / 0.25)`, about 0.996 at 0.03 rad/s), and the policy has no heading input (observation: body-frame velocity, gyro, gravity direction, joint angles and speeds, last action, command). So heading drift is expected, not a bug. The drift followed the sideways command in this run (+21°, -20°, -36°, -17° at y = 0.5, -0.5, -1, 0), but that is four points from one run.
+- A heading-hold controller outside the policy (yaw command from the heading error) is the cheap fix, not retraining. Not built yet.
+- The laptop's battery died during the rollouts. The training had already finished and saved, so only the rollouts were redone.
+
+### ~17:10 — Test 7.5: Test 5 policy on a sideways command
+
+**Question:** In Test 7 the Test 5 policy stood still on 1 / -1 / 0 while the 120M policy walked it. Is that about the range (y = -1 is out of ±0.8) or about sideways walking in general? Same `go1_final` (checked identical to `~/backup_run1`), only the command changes.
+
+| Test 5 policy, command | mean `track` | mean `linvel` x, y | Distance from start |
+|---|---|---|---|
+| 1 / 0 / 0 | 0.941 | 0.963, 0.010 | 19.2 m |
+| **1 / -0.5 / 0** | **0.935** | 0.958, -0.447 | 21.1 m |
+| 1 / -1 / 0 | 0.0004 | 0.004, -0.003 | 0.09 m |
+
+**Findings**
+- The Test 5 policy walks y = -0.5, so it can walk sideways. Its failure at y = -1 is most likely the range. Not proven: only two y values, the combined speed could matter, and the two runs also differ in seed, steps and `num_evals`.
+- The 120M policy extrapolated to y = -1 anyway: two policies, two outcomes on the same out-of-range command.
+
+### Tools added (Scripts/)
+- `rollout.py` now saves the motion data (`motion_<...>.npz`) and has `--no-video`. Without video it copies each step's numbers to the CPU right away, so nothing piles up on the GPU.
+- `plot_motion.py`: distance, velocity against the command, and rotation (yaw angle (total) and yaw rate).
+- `plot_trail.py`: a bird's-eye trail of the body centre and the head tip, both shaded from start to end. The head is 0.3 m ahead of the body centre in the model; `--head-length 2` is only a drawing aid for long walks.
+- `plot_reward.py`: reward table and graph from a training log.
+- I checked the Playground source: no chase or target-following task, and the gait modes (trot, walk, pace, bound, pronk) exist only for Spot and H1, not Go1. Only flat and rough Go1 terrains are wired up (stairs and bowl scene files exist but are unused).
+
+### ~20:05 — Test 8: rough terrain (stopped early)
+
+**Setup:** `~/go1_rough110`, `Go1JoystickRoughTerrain`, `num_timesteps` 110M, `num_evals` 18 (planned 111,411,200 steps, 17 epochs of 6,553,600), `num_envs` 4096. **The run stopped at 91,750,400 steps** (24 min, about 66k steps/s) with a GPU out-of-memory error (`Failed to allocate 524288 bytes on device 'cuda:0'`). No `go1_final` was saved, so the rollouts use `ckpt_91750400`. The cause is unknown.
+
+**Reward:** 7.5 at 6.6M, 18.4 at 19.7M, about 19 to 20 from 20M to 66M, then a climb to 24.1 at 91.75M, still rising. Flat (Test 7) had 25.5 at about 90M.
+
+| Command (x / y / yaw) | mean `track` | mean `linvel` x, y | Rollout length | Distance from start | Yaw turned |
+|---|---|---|---|---|---|
+| 1 / 0 / 0 | 0.929 | 0.965, 0.002 | 13.2 s | 12.6 m | +14° |
+| 1 / -1 / 0 | 0.817 | 0.890, -0.832 | 7.6 s | 9.3 m | -19° |
+| 1 / -1 / 1 | 0.914 | 0.930, -0.946 | 20 s | 0.24 m | +1077° (3 laps) |
+| 0.5 / 0.5 / 3 | 0.848 | 0.604, 0.366 | 20 s | 0.05 m | +3208° (about 9 laps) |
+
+**Findings**
+- The policy follows all four commands on the bumpy ground, including a turn of 3 (the trained limit is 1.2). With a turn of 1 it walks a circle about 2.8 m wide; with a turn of 3, about 0.5 m wide.
+- The rough patch is 20 m across (±10 m). A straight walk reaches the edge after 7 to 13 s, so those rollouts are stopped at 9.5 m from the centre and cover less than 20 s.
+- The video rollouts for the two circling commands first crashed with GPU out-of-memory: a video rollout keeps every step's state on the GPU, and the rough states are bigger. Moving each state to the CPU fixed it, at about 11 minutes per video rollout.
+- Videos: I looked at contact sheets (8 frames, 2.5 s apart) only. The robot stays upright, the legs change pose frame to frame, the ground is rocky and bumpy. Gait quality (sliding, hopping) is not checked.
+- A quick check, not saved in the repo: the flat policy from Test 7 scored 0.46 on 1 / -1 / 1 on this terrain, against 0.914 here. Different training runs, so a hint only.
+- Caveats: one seed, 82% of the planned steps, small bumps (up to about 5 cm). Logs: `Tests/Test7/Test7.md`, `Tests/Test7.5/Test7.5.md`, `Tests/Test8/Test8.md`.
+
 ### Insights so far
 1. Judge walking by rollout numbers and video, not by reward.
 2. Plan at least about 100M steps (the official setup is 200M). Standing is a stable local optimum that takes many steps to leave.
 3. Always read the real step count from `last step count`, not from `num_timesteps`.
 4. One folder per run, so results do not overwrite each other.
+5. A command outside the trained range is not blocked. Behaviour varies: the 120M policy followed y = -1, the Test 5 policy did not (two runs, not a rule).
+6. Sideways and diagonal walking works for commands inside the range (both policies).
+7. Heading drifts slowly because yaw is a rate and the policy has no heading input. The fix belongs outside the policy.
+8. Video rollouts hold every state on the GPU, so long ones can run out of memory. Move the states to the CPU, or skip the video.
+9. On rough ground the policy followed every command tried (one run, stopped at 82%).
 
 ### Still unknown
-- Where between 50.8M and 101.6M steps walking appears.
+- Whether walking starts around 57M to 66M steps in the 120M run (reward climbs there). Needs those checkpoints rolled out.
 - Whether `num_envs` 8192 changes the result.
-- Whether the policy follows yaw, sideways and backward commands.
+- Whether the policy walks backward and turns in place (diagonals work).
 - How good the gait is (speed variation, sliding, hopping).
-- How much results vary between seeds.
+- How much results vary between seeds, and whether the drift follows the sideways command.
+- Whether the full 111M steps on rough ground would change the result, and why the GPU ran out of memory at epoch 14.
 - Whether the constant solver warnings slow training.
 
 ### Next
-1. Roll out `ckpt_50790400` from the Test 5 run (reward 19.556, expected to stand still).
-2. Rerun 100M with `num_evals` 20, then plot `track` against steps for several checkpoints.
-3. Rollouts for other commands on `go1_final`: 0 / 0 / 1, 0 / 0.5 / 0, -0.5 / 0 / 0, 1 / 0.5 / 0.5.
-4. 200M steps (about 40 minutes at this speed), and a second seed.
-5. Read the reward code and write two terms in my own words.
+See `todo.md` for the running list. The first items: roll out `ckpt_57344000` and `ckpt_65536000` on 1 / 0 / 0, a full checkpoint sweep, and the Test 5 policy on y = -0.8 and -0.9.
