@@ -5,6 +5,9 @@
 ### Latest test: [Test 6](Tests/Test6/Test6.md)
 **Control run, about 29.5M steps: the Go1 stays upright but doesn't walk.**
 
+<a href="Tests/Test6/Test6.md"><img src="Tests/Test6/reward_plot.png" width="560" alt="Test 6, eval reward vs steps"></a>
+<br><sub>eval reward vs steps &nbsp;·&nbsp; 19.6 at 29.5M steps</sub>
+
 <table align="center">
   <tr>
     <td align="center">
