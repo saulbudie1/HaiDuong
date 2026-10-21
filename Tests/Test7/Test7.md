@@ -77,7 +77,7 @@ The Test 5 row is from a rollout in WSL (`~/go1_test7`) that is not copied here.
 - I looked at 8-frame contact sheets (2.5 s apart) of the three 1 / -1 / 0 videos only. The other videos are not watched.
 - Robot upright in every frame. The legs are in a different pose each frame, which fits stepping. The floor grid and lighting move past the tracking camera, so it travels.
 - 2.5 s between frames is too coarse to see sliding or hopping, so gait quality is not checked.
-- The README preview gifs are 6 s clips (2 s to 8 s) of the 1 / -1 / 0 videos.
+- The README preview gifs are 4 s clips (2 s to 6 s) of the 1 / -1 / 0 videos, at the video's 25 fps.
 
 ## Takeaway
 
