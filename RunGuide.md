@@ -10,6 +10,7 @@ How to train the Go1 policy, test it, and judge whether it walks. Written for my
 |---|---|
 | Python environment | `~/go1env` |
 | Working folder | `~/go1` (training script `train_test.py`, rollout script `rollout.py`) |
+| Scripts in the repo | `Scripts/` (`train_test.py`, `rollout.py`, `plot_reward.py`, `plot_motion.py`). Copy them into the run folder, see 2.1. |
 | First 100M run (backup) | `~/backup_run1` |
 | Open the folder from Windows | `\\wsl$\Ubuntu-24.04\home\thanh\go1` |
 | Project on Windows | `C:\Users\Admin\Documents\HaiDuong` (WSL path `/mnt/c/Users/Admin/Documents/HaiDuong`) |
@@ -33,7 +34,7 @@ The prompt should start with `(go1env)`. Type commands **one at a time**. Pastin
 Saved files have fixed names (`go1_final`, `ckpt_<step>`), so a new run in the same folder overwrites them. Use one folder per run:
 ```
 mkdir -p ~/go1_run2
-cp ~/go1/train_test.py ~/go1/rollout.py ~/go1_run2/
+cp ~/go1/train_test.py ~/go1/rollout.py ~/go1/plot_reward.py ~/go1/plot_motion.py ~/go1_run2/
 cd ~/go1_run2
 ```
 
@@ -101,8 +102,12 @@ python rollout.py 1 0 0 go1_final
 ```
 - `x`: forward speed (m/s), `y`: sideways speed (m/s), `yaw`: turn rate (rad/s).
 - Checkpoint: `go1_final`, `ckpt_50790400`, `ckpt_0` (untrained), and so on.
-- It prints `mean track` and `mean linvel`, then renders three videos (`top`, `side`, `track`). Wait for `done`.
+- It prints `mean track` and `mean linvel`, saves the motion data (`motion_<...>.npz`, see 3.1), then renders three videos (`top`, `side`, `track`). Wait for `done`.
 - It takes a few minutes. Nothing prints until the end.
+- To skip the videos and only save the motion data (faster, less GPU memory):
+```
+python rollout.py 1 0 0 go1_final --no-video
+```
 
 **Trained command range (stay inside it):** x ±1.5 m/s, y ±0.8 m/s, yaw ±1.2 rad/s. Larger values mean nothing.
 
@@ -112,37 +117,41 @@ sudo apt install -y libosmesa6-dev libgl1
 ```
 then change `"egl"` to `"osmesa"` on the `MUJOCO_GL` line at the top of `rollout.py` (slower, but works).
 
+### 3.1 Motion graphs (distance, velocity, rotation)
+
+`plot_motion.py` reads the `.npz` that `rollout.py` saved. It never touches the GPU, so run it as a separate step:
+```
+python plot_motion.py motion_x1.0_y0.0_yaw0.0_go1_final.npz
+```
+It prints a short summary and saves `motion_x1.0_y0.0_yaw0.0_go1_final.png` with three graphs:
+
+| Graph | Shows |
+|---|---|
+| Distance | x and y position and distance from the start, in metres. A standing robot gives flat lines. |
+| Velocity vs command | Body-frame x and y velocity, with the commanded values as dashed lines. |
+| Rotation | Yaw angle (degrees) and yaw rate (rad/s), with the yaw command dashed. |
+
+- Several files at once, PNGs into a folder: `python plot_motion.py motion_*.npz -o plots`
+- The `.npz` also holds the accelerometer reading (`accel`) if you ever want acceleration. It is not plotted.
+- Test 6 check (29.5M steps, command 1 / 0 / 0): ends 0.04 m from the start, mean velocity about 0.002 m/s, `track` 0.019. This is standing still.
+
 ---
 
 ## 4. Get files to Windows
 
 ```
 mkdir -p /mnt/c/Users/Admin/Documents/HaiDuong/Tests/TestN
-cp ~/go1_run2/*.mp4 /mnt/c/Users/Admin/Documents/HaiDuong/Tests/TestN/
+cp ~/go1_run2/*.mp4 ~/go1_run2/*.png /mnt/c/Users/Admin/Documents/HaiDuong/Tests/TestN/
 ```
 Name or sort videos by checkpoint and command. Keep weights and logs in WSL (backups: `cp ~/go1_run2/ckpt_* ~/go1_run2/go1_final ~/go1_run2/*.log ~/backup_run2/`).
 
 ### Reward graph from the log
-```python
-import re
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
-steps, rewards = [], []
-for line in open("run2.log"):
-    m = re.match(r"steps=\s*(\d+)\s+reward=([-\d.]+)", line)
-    if m:
-        steps.append(int(m.group(1)))
-        rewards.append(float(m.group(2)))
-
-plt.plot(steps, rewards, marker="o")
-plt.xlabel("# environment steps")
-plt.ylabel("reward per episode")
-plt.grid(True)
-plt.savefig("reward_curve.png", dpi=150)
 ```
-Run `python plot_reward.py` in the folder with the log. More `num_evals` means more points.
+python plot_reward.py run2.log -o reward_plot.png
+```
+It prints a table (steps, reward, change, elapsed time) and saves the graph. More `num_evals` means more points.
+
+To compare runs on one graph, list several logs: `python plot_reward.py run1.log run2.log -o compare.png`. It needs matplotlib, so run it inside `go1env`.
 
 ---
 
@@ -168,7 +177,7 @@ Suggested rough pass criteria (my own, not a standard): `mean track` above about
 
 Notes:
 - The mean includes the start-up transient.
-- `track` only covers x/y speed. For yaw, judge by the video (turn rate) or add a print of the gyro yaw.
+- `track` only covers x/y speed. For yaw, use the Rotation graph from `plot_motion.py` (3.1) and the video.
 - One rollout is one sample. Rerun a command, or compare checkpoints, before trusting small differences.
 
 ### 5.2 The video
@@ -225,6 +234,9 @@ Always record: steps actually run, `num_envs`, `num_evals`, GPU, and which folde
 | Overwrote old results | Use one folder per run. Restore from `~/backup_run1`. |
 | `device_put_replicated` error | The shim lines near the top of `train_test.py` are missing. |
 | Rollout EGL/OpenGL error | Use `osmesa` (section 3). |
+| Rollout stops with `RESOURCE_EXHAUSTED` (before `command:` prints) | GPU memory is full. Run `export XLA_PYTHON_CLIENT_PREALLOCATE=false` first (section 1), or add `--no-video`. |
+| `plot_motion.py` says file not found | Run `rollout.py` first (it creates the `.npz`) and check the name with `ls motion_*.npz`. |
+| `ModuleNotFoundError: matplotlib` | You are not in `go1env`. Run `source ~/go1env/bin/activate`. |
 | Constant `iterations limit reached` lines | Normal solver warnings. Hidden by the `grep -v` filter. |
 | Videos look the same as an older run | You loaded the same checkpoint. Check the name in the file and the folder. |
 | Laptop too hot (above about 90°C) | Stop, cool it, then continue. |
