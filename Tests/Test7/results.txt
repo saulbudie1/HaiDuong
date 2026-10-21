@@ -1,0 +1,12 @@
+command: 1.0 0.0 0.0
+mean track: 0.9420339566096664
+mean linvel (body frame): [ 0.9430811  -0.0033359   0.00346504]
+command: 1.0 0.5 0.0
+mean track: 0.9430524584054947
+mean linvel (body frame): [0.9654019  0.46361497 0.00472117]
+command: 1.0 -0.5 0.0
+mean track: 0.9530369093231856
+mean linvel (body frame): [ 0.95499396 -0.4771613   0.00366683]
+command: 1.0 -1.0 0.0
+mean track: 0.9316747761443257
+mean linvel (body frame): [ 0.9496279  -0.92954284  0.00530221]

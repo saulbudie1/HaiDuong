@@ -2,27 +2,27 @@
 
 <div align="center">
 
-### Latest test: [Test 6](Tests/Test6/Test6.md)
-**Control run, about 29.5M steps: the Go1 stays upright but doesn't walk.**
+### Latest test: [Test 7](Tests/Test7/Test7.md)
+**Diagonal commands, about 123M steps: the Go1 walks forward and sideways at the same time, even outside the trained range.**
 
-<a href="Tests/Test6/Test6.md"><img src="Tests/Test6/reward_plot.png" width="560" alt="Test 6, eval reward vs steps"></a>
-<br><sub>eval reward vs steps &nbsp;·&nbsp; 19.6 at 29.5M steps</sub>
+<a href="Tests/Test7/Test7.md"><img src="Tests/Test7/reward_plot.png" width="560" alt="Test 7, eval reward vs steps"></a>
+<br><sub>eval reward vs steps &nbsp;·&nbsp; 26.9 at 122.9M steps</sub>
 
 <table align="center">
   <tr>
     <td align="center">
-      <a href="Tests/Test6/Test6.md"><img src="Tests/Test6/preview/side.gif" width="360" alt="Test 6, side view"></a>
+      <a href="Tests/Test7/Test7.md"><img src="Tests/Test7/preview/side.gif" width="360" alt="Test 7, side view"></a>
       <br><sub>side view</sub>
     </td>
     <td align="center">
-      <a href="Tests/Test6/Test6.md"><img src="Tests/Test6/preview/top.gif" width="360" alt="Test 6, top view"></a>
+      <a href="Tests/Test7/Test7.md"><img src="Tests/Test7/preview/top.gif" width="360" alt="Test 7, top view"></a>
       <br><sub>top view</sub>
     </td>
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <a href="Tests/Test6/Test6.md"><img src="Tests/Test6/preview/track.gif" width="480" alt="Test 6, track view"></a>
-      <br><sub>track view &nbsp;·&nbsp; command x = 1, y = 0, yaw = 0 &nbsp;·&nbsp; mean speed tracking 0.019 (standing still)</sub>
+      <a href="Tests/Test7/Test7.md"><img src="Tests/Test7/preview/track.gif" width="480" alt="Test 7, track view"></a>
+      <br><sub>track view &nbsp;·&nbsp; command x = 1, y = -1, yaw = 0 &nbsp;·&nbsp; mean speed tracking 0.932 (walking)</sub>
     </td>
   </tr>
 </table>
