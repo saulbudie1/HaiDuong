@@ -62,6 +62,17 @@ Reward sits at about 19 from 25M to 57M steps (the level of the standing policie
 - Heading drifts a little in all four (yaw is commanded 0), and most at 1 / -1 / 0 (-36° over 20 s).
 - +y is left in this simulator, so 0.5 is forward-left and -0.5 and -1 are forward-right.
 
+### Why it still turns a little at yaw = 0
+
+"Yaw angle (total)" in the motion graph is the heading change since the start, in degrees. It comes from the body orientation, unwrapped, with the first value subtracted.
+
+- The yaw command is a turn rate, not a heading. `yaw = 0` means "do not spin" (0 rad/s). It does not mean "keep facing the same way".
+- A tiny leftover spin adds up. At 1 / -1 / 0 the mean yaw rate was -0.031 rad/s, and -0.031 rad/s over 20 s is about -0.62 rad, which is the -36° in the graph.
+- The reward does not punish it. `tracking_ang_vel` is `exp(-error² / 0.25)`, so an error of 0.03 rad/s still scores about 0.996.
+- The policy cannot steer back, because it has no heading input. Its observation holds body-frame velocity, gyro (spin rate), gravity direction, joint angles and speeds, the last action and the command (checked in `joystick.py`), with no absolute yaw angle.
+- The yaw rate itself swings about ±0.3 rad/s with each step of the gait. The drift comes from a small bias in the average.
+- The drift is in the same direction as the sideways command: +21° at y = +0.5, -20° at y = -0.5, -36° at y = -1, and -17° at y = 0. That is four points from one run. I do not know why, so I treat it as something noticed, not a finding.
+
 ### 1 / -1 / 0 against the Test 5 policy
 
 | Policy | mean `track` | mean `linvel` x, y | Distance from start |
@@ -69,7 +80,7 @@ Reward sits at about 19 from 25M to 57M steps (the level of the standing policie
 | Test 5 (101.6M, `num_evals` 3) | 0.0004 | 0.004, -0.003 | 0.09 m |
 | This run (122.9M, `num_evals` 16) | 0.932 | 0.950, -0.930 | 26.0 m |
 
-The Test 5 row is from a rollout in WSL (`~/go1_test7`) that is not copied here. The trained y range is ±0.8 (`command_config.a = [1.5, 0.8, 1.2]`), so y = -1 is outside it. I did not roll out the Test 5 policy on any in-range sideways command, so I do not know whether its failure comes from the range or from sideways walking in general.
+The Test 5 row is from [Test 7.5](../Test7.5/Test7.5.md). The trained y range is ±0.8 (`command_config.a = [1.5, 0.8, 1.2]`), so y = -1 is outside it. Test 7.5 also rolled the Test 5 policy on 1 / -0.5 / 0, and it walks that one (`track` 0.935). So its failure at y = -1 is most likely the range, not sideways walking in general.
 
 ## Videos (20 s each, 3 cameras)
 
@@ -88,18 +99,18 @@ The Test 5 row is from a rollout in WSL (`~/go1_test7`) that is not copied here.
 
 ## Open questions
 
-- Does the Test 5 policy walk an in-range sideways command (1 / -0.5 / 0)? That separates "range" from "sideways in general".
+- Answered in [Test 7.5](../Test7.5/Test7.5.md): the Test 5 policy walks 1 / -0.5 / 0, so the range is the likelier cause of its failure at y = -1.
 - Where does the 120M policy stop following y (try -1.5 and -2)?
 - Is the 1 / -1 / 0 result typical, or lucky? Needs a second seed.
 - Where between 49M and 66M does walking appear? Rolling out `ckpt_57344000` and `ckpt_65536000` would show.
-- Gait quality (sliding, hopping) and the extra yaw drift at 1 / -1 / 0.
+- Gait quality (sliding, hopping).
+- Whether the yaw drift follows the sideways command in other runs, and why (see "Why it still turns" above).
 
 ## Next
 
-1. Roll out the Test 5 checkpoint on 1 / -0.5 / 0.
-2. Roll out `ckpt_57344000` and `ckpt_65536000` of this run on 1 / 0 / 0.
-3. Roll out this run on y = -1.5 and -2.
-4. Second seed at the same settings.
+1. Roll out `ckpt_57344000` and `ckpt_65536000` of this run on 1 / 0 / 0.
+2. Roll out this run on y = -1.5 and -2.
+3. Second seed at the same settings.
 
 ## Evidence
 

@@ -59,8 +59,8 @@ def plot(path, out_dir):
     ax.legend(loc="upper left", ncol=2)
 
     ax = axs[2]
-    ax.plot(t, yaw, color="C2", label="yaw angle")
-    ax.set_ylabel("yaw angle (deg)", color="C2")
+    ax.plot(t, yaw, color="C2", label="yaw angle (total)")
+    ax.set_ylabel("yaw angle (total, deg)", color="C2")
     ax.set_xlabel("time (s)")
     ax.set_title("Rotation")
     ax2 = ax.twinx()
